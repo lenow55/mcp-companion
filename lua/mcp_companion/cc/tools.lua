@@ -153,6 +153,118 @@ local function _make_output(display_name)
     }
 end
 
+--- Register the internal _combiner pseudo-server as a CC-visible MCP group.
+---
+--- The Python combiner exposes a small set of management tools
+--- (combiner__status, combiner__session_enable_server, combiner__session_disable_server,
+--- combiner__session_status, …) inside its own pseudo-server entry. Normally those
+--- tools only exist on the combiner's MCP wire and are invisible to the LLM.
+---
+--- This function pulls them through CC's `mcp.register_tools()` API so the LLM
+--- can call them directly from the chat. Models then discover servers via
+--- `combiner__status` and attach/detach them per-session via
+--- `combiner__session_enable_server` / `combiner__session_disable_server` —
+--- without the user needing a slash command or restart.
+---
+--- @return boolean registered true if any tools were registered.
+function M._register_combiner_tools()
+    local cc_mcp_ok, cc_mcp = pcall(require, "codecompanion.mcp")
+    if not cc_mcp_ok then
+        return false
+    end
+
+    local state = require("mcp_companion.state")
+    local combiner = require("mcp_companion.combiner")
+    local client = combiner.client
+    if not client then
+        return false
+    end
+
+    local servers = state.field("servers") or {}
+
+    -- Find the _combiner pseudo-server entry (created by the Python combiner).
+    local combiner_server
+    for _, srv in ipairs(servers) do
+        if srv.name == "_combiner" then
+            combiner_server = srv
+            break
+        end
+    end
+    if not combiner_server or not combiner_server.tools or #combiner_server.tools == 0 then
+        return false
+    end
+
+    -- Resolve system_prompts the same way M.register() does, so user opt-out
+    -- (`cc.tool_system_prompts = false`) also suppresses meta-tool spam.
+    local project = require("mcp_companion.project")
+    local sysp_enabled = project.resolve_tool_system_prompts(config.get().cc.tool_system_prompts)
+
+    local server_tools = {}
+    local tool_keys = {}
+    for _, tool in ipairs(combiner_server.tools) do
+        local display = tool._display or tool.name
+        local namespaced = tool._namespaced or tool.name
+        local key = namespaced
+
+        -- Capture loop variables for the closure.
+        local captured_display = display
+        local captured_namespaced = namespaced
+        local captured_description = tool.description or ("Combiner: " .. display)
+        local captured_input_schema = schema.normalize(tool.inputSchema)
+
+        server_tools[key] = {
+            description = captured_description,
+            callback = function()
+                return {
+                    name = key,
+                    cmds = {
+                        _make_combiner_cmd(client, captured_namespaced, captured_display, "_combiner"),
+                    },
+                    system_prompt = sysp_enabled and function(_group_config, _ctx)
+                        return string.format(
+                            "Combiner management tool `%s`: %s\n",
+                            captured_display,
+                            captured_description
+                        )
+                    end or nil,
+                    output = _make_output(captured_display),
+                    schema = {
+                        type = "function",
+                        ["function"] = {
+                            name = key,
+                            description = captured_description,
+                            parameters = captured_input_schema,
+                        },
+                    },
+                }
+            end,
+        }
+
+        table.insert(tool_keys, key)
+    end
+
+    local group = {
+        description = "Combiner management — call combiner__status to list servers, "
+            .. "combiner__session_enable_server to attach one to this chat, "
+            .. "and combiner__session_disable_server to hide it.",
+        tools = tool_keys,
+        system_prompt = sysp_enabled and function(_group_config, _ctx)
+            return string.format(
+                "You have access to %d combiner management tool(s). Use `combiner__status` "
+                    .. "to discover configured MCP servers, then call "
+                    .. "`combiner__session_enable_server` to make a server's tools "
+                    .. "available in this chat before invoking them.\n",
+                #tool_keys
+            )
+        end or nil,
+        opts = { collapse_tools = true },
+    }
+
+    cc_mcp.register_tools("_combiner", server_tools, group)
+    log.info("CC: registered combiner management group (%d tools)", #tool_keys)
+    return true
+end
+
 --- Register all MCP tools from the combiner into CodeCompanion's MCP registry.
 --- Uses CC's `mcp.register_tools()` API which persists across config reloads.
 function M.register()
@@ -299,6 +411,12 @@ function M.register()
         cc_mcp.register_tools("combiner", {}, combiner_group)
         log.debug("CC tools: registered aggregate combiner group (%d tools)", #all_tool_keys)
     end
+
+    -- Expose the internal _combiner pseudo-server's meta-tools to the LLM
+    -- (combiner__status, session_enable_server, session_disable_server,
+    -- session_status, …). Models can then attach/detach MCP servers from
+    -- inside the chat without going through a slash command.
+    M._register_combiner_tools()
 
     _last_fingerprint = fp
 end
