@@ -126,28 +126,62 @@ local function _make_native_cmd(server_name, tool_name)
     end
 end
 
---- Build output handlers for tool results
+--- Build output handlers for tool results.
+---
+--- Handlers follow CodeCompanion's tool-output contract (see
+--- `interactions/chat/tools/orchestrator.lua` + the builtin tools):
+---   * `success(self, stdout, meta)` — `stdout` is the array of `data` payloads
+---     pushed by `output_cb`; `meta.tools.chat` is the active chat.
+---   * `error(self, stderr, meta)` — `stderr` is the array of error payloads.
+---   * `rejected(self, meta)` — the orchestrator does NOT use a return value;
+---     the message must be written to the chat via `meta.tools.chat`.
+--- All three must call `chat:add_tool_output(tool, { content = ..., display = ... })`
+--- (a table, not a bare string) so the result reaches the LLM and the buffer.
 --- @param display_name string Tool display name for output formatting
 --- @return table
 local function _make_output(display_name)
     return {
-        rejected = function(_self, rejected_msg) -- luacheck: ignore 212/_self
-            return string.format("**`%s` Tool Rejected**: %s", display_name, rejected_msg or "No reason given")
+        rejected = function(self, meta) -- luacheck: ignore 212/self
+            meta = meta or {}
+            local chat = meta.tools and meta.tools.chat
+            if not chat then
+                return
+            end
+            local reason = meta.opts and meta.opts.reason
+            local msg = string.format("**`%s` Tool Rejected**", display_name)
+            if reason and reason ~= "" then
+                msg = string.format('%s: "%s"', msg, reason)
+            end
+            chat:add_tool_output(self, { content = msg })
         end,
-        error = function(_self, error_msg) -- luacheck: ignore 212/_self
-            return string.format("**`%s` Tool Error**: %s", display_name, error_msg or "Unknown error")
+        error = function(self, stderr, meta) -- luacheck: ignore 212/self
+            local chat = meta and meta.tools and meta.tools.chat
+            if not chat then
+                return
+            end
+            local err = vim.iter(stderr or {}):flatten():join("\n")
+            local text = err ~= "" and err or "Unknown error"
+            chat:add_tool_output(self, {
+                content = text,
+                display = string.format("**`%s` Tool Error**:\n%s", display_name, text),
+            })
         end,
         success = function(self, stdout, meta) -- luacheck: ignore 212/self
             local chat = meta and meta.tools and meta.tools.chat
             if not chat then
                 return
             end
-            local out = stdout and (stdout[#stdout] or {}) or {}
-            local text = type(out) == "table" and (out.data or "") or tostring(out)
+            local text = vim.iter(stdout or {}):flatten():join("\n")
             if text == "" then
-                chat:add_tool_output(self, string.format("**`%s` Tool**: Completed with no output.", display_name))
+                chat:add_tool_output(self, {
+                    content = string.format("`%s` completed with no output.", display_name),
+                    display = string.format("`%s` completed with no output.", display_name),
+                })
             else
-                chat:add_tool_output(self, string.format("**`%s` Tool**: Returned:\n```\n%s\n```", display_name, text))
+                chat:add_tool_output(self, {
+                    content = text,
+                    display = string.format("**`%s` Tool**:\n```\n%s\n```", display_name, text),
+                })
             end
         end,
     }
