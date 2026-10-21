@@ -26,10 +26,30 @@ local function _get_disabled(bufnr)
     return _session_state[bufnr]
 end
 
+--- Remove a group from the chat's tool registry, tolerating CC version drift:
+--- current CC ships `remove_group`; older builds shipped `remove`. Neither
+--- present → silent no-op (matches the old nil-guarded behaviour).
+--- @param registry table|nil CodeCompanion.Chat.ToolRegistry
+--- @param group_name string Full group name (e.g. "mcp:combiner")
+local function _remove_group(registry, group_name)
+    if not registry then
+        return
+    end
+    if registry.remove_group then
+        pcall(registry.remove_group, registry, group_name)
+    elseif registry.remove then
+        pcall(registry.remove, registry, group_name)
+    end
+end
+
 --- Sync CC tool registry after a session toggle.
 --- On disable: remove the server's tool group from the chat's tool_registry
 --- and unregister from the global CC MCP registry.
---- On enable: re-register the server's tools and re-add the group.
+--- On enable: re-register the server's tools and add ONLY its per-server
+--- group. The aggregate combiner group is deliberately NOT (re)added here:
+--- it is static (every server's tools, ignoring the session filter) and would
+--- leak session-disabled tools into the prompt. Users who want everything
+--- opt in explicitly via @mcp-combiner.
 --- @param chat table CC chat object
 --- @param server_name string
 --- @param is_disabling boolean true if disabling, false if re-enabling
@@ -44,13 +64,12 @@ local function _sync_cc_tool_group(chat, server_name, is_disabling)
 
     if is_disabling then
         -- Remove the per-server group from this chat's tool_registry
-        if chat.tool_registry and chat.tool_registry.remove then
-            pcall(chat.tool_registry.remove, chat.tool_registry, group_name)
-        end
-        -- Also remove the aggregate combiner group — it contains tools from the
-        -- now-disabled server and needs to be rebuilt
-        if chat.tool_registry and chat.tool_registry.remove then
-            pcall(chat.tool_registry.remove, chat.tool_registry, combiner_group_name)
+        _remove_group(chat.tool_registry, group_name)
+        -- The aggregate combiner group (if present in this chat) contains the
+        -- now-disabled server's tools — drop it too so the LLM stops seeing
+        -- them. It is keyed by the raw group name in registry.groups.
+        if chat.tool_registry and chat.tool_registry.groups and chat.tool_registry.groups[combiner_group_name] then
+            _remove_group(chat.tool_registry, combiner_group_name)
         end
         -- Unregister from the global MCP registry so new chats don't see it
         if cc_mcp.unregister_tools then
@@ -69,15 +88,10 @@ local function _sync_cc_tool_group(chat, server_name, is_disabling)
             end
             cc_init._register_all()
         end
-        -- Re-add the per-server group to this chat
+        -- Re-add the per-server group to this chat (and nothing else — see
+        -- the function doc for why the combiner group is not re-added).
         if chat.tool_registry then
             chat.tool_registry:add(group_name, {
-                config = chat.tools and chat.tools.tools_config,
-            })
-        end
-        -- Re-add the aggregate combiner group
-        if chat.tool_registry then
-            chat.tool_registry:add(combiner_group_name, {
                 config = chat.tools and chat.tools.tools_config,
             })
         end
