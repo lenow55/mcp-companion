@@ -76,6 +76,9 @@ local M = {}
 ---   the tools array. Default true: helps models that ignore JSON-Schema descriptions.  Set false to save
 ---   tokens (descriptions duplicate the schema's `description` fields, ~one extra system message per tool).
 ---   Overridden per-project by .mcp-companion.json (see mcp_companion.project).
+--- @field hide_tool_output boolean If true, the output handlers of every proxied and native MCP tool
+---   pass `display = false` to CodeCompanion's `add_tool_output`, so the buffer stays clean while the
+---   LLM still receives the full output. Default false (show the usual "Tool: ..." blocks).
 --- @field normalize_schema boolean Whether the combiner normalizes tool JSON schemas globally.
 ---   Fixes schemas where ``type`` and ``anyOf`` coexist at the same level, which strict
 ---   providers (e.g. moonshot-ai/kimi) reject with a 400 error.  The transformation is
@@ -225,6 +228,7 @@ M.defaults = {
         auto_acp_tools = true,
         auto_cli_tools = true,
         tool_system_prompts = true,
+        hide_tool_output = false,
         normalize_schema = false,
         adapters = {},
     },

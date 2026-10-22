@@ -137,9 +137,14 @@ end
 ---     the message must be written to the chat via `meta.tools.chat`.
 --- All three must call `chat:add_tool_output(tool, { content = ..., display = ... })`
 --- (a table, not a bare string) so the result reaches the LLM and the buffer.
+---
+--- When `hide` is true the handlers pass `display = false`: the output is kept
+--- in the LLM message history but nothing is drawn into the chat buffer
+--- (cc.hide_tool_output / .mcp-companion.json#hide_tool_output).
 --- @param display_name string Tool display name for output formatting
+--- @param hide? boolean Suppress buffer rendering of the output
 --- @return table
-local function _make_output(display_name)
+local function _make_output(display_name, hide)
     return {
         rejected = function(self, meta) -- luacheck: ignore 212/self
             meta = meta or {}
@@ -152,7 +157,7 @@ local function _make_output(display_name)
             if reason and reason ~= "" then
                 msg = string.format('%s: "%s"', msg, reason)
             end
-            chat:add_tool_output(self, { content = msg })
+            chat:add_tool_output(self, { content = msg, display = hide and false or nil })
         end,
         error = function(self, stderr, meta) -- luacheck: ignore 212/self
             local chat = meta and meta.tools and meta.tools.chat
@@ -163,7 +168,7 @@ local function _make_output(display_name)
             local text = err ~= "" and err or "Unknown error"
             chat:add_tool_output(self, {
                 content = text,
-                display = string.format("**`%s` Tool Error**:\n%s", display_name, text),
+                display = hide and false or string.format("**`%s` Tool Error**:\n%s", display_name, text),
             })
         end,
         success = function(self, stdout, meta) -- luacheck: ignore 212/self
@@ -175,12 +180,12 @@ local function _make_output(display_name)
             if text == "" then
                 chat:add_tool_output(self, {
                     content = string.format("`%s` completed with no output.", display_name),
-                    display = string.format("`%s` completed with no output.", display_name),
+                    display = hide and false or string.format("`%s` completed with no output.", display_name),
                 })
             else
                 chat:add_tool_output(self, {
                     content = text,
-                    display = string.format("**`%s` Tool**:\n```\n%s\n```", display_name, text),
+                    display = hide and false or string.format("**`%s` Tool**:\n```\n%s\n```", display_name, text),
                 })
             end
         end,
@@ -222,6 +227,7 @@ function M.register()
     -- re-registration (e.g. after :MCPRestart or a servers-updated event).
     local project = require("mcp_companion.project")
     local sysp_enabled = project.resolve_tool_system_prompts(config.get().cc.tool_system_prompts)
+    local hide_output = project.resolve_hide_tool_output(config.get().cc.hide_tool_output)
 
     for _, server in ipairs(servers) do
         -- Skip the internal _combiner pseudo-server
@@ -262,7 +268,7 @@ function M.register()
                                 captured_description
                             )
                         end or nil,
-                        output = _make_output(captured_display),
+                        output = _make_output(captured_display, hide_output),
                         schema = {
                             type = "function",
                             ["function"] = {
@@ -361,6 +367,7 @@ function M.register_native()
 
     local project = require("mcp_companion.project")
     local sysp_enabled = project.resolve_tool_system_prompts(config.get().cc.tool_system_prompts)
+    local hide_output = project.resolve_hide_tool_output(config.get().cc.hide_tool_output)
 
     local registered_tools = 0
     for _, server in ipairs(native_servers) do
@@ -389,7 +396,7 @@ function M.register_native()
                                     )
                                 end
                             or nil,
-                        output = _make_output(display),
+                        output = _make_output(display, hide_output),
                         schema = {
                             type = "function",
                             ["function"] = {

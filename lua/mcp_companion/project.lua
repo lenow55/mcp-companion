@@ -120,6 +120,11 @@ local function validate(raw)
         return nil, "tool_system_prompts must be a boolean"
     end
 
+    local hide_tool_output = raw.hide_tool_output
+    if hide_tool_output ~= nil and type(hide_tool_output) ~= "boolean" then
+        return nil, "hide_tool_output must be a boolean"
+    end
+
     -- auto_approve: object mapping server name -> spec (boolean | string[]).
     local auto_approve = raw.auto_approve
     if auto_approve ~= nil then
@@ -182,6 +187,7 @@ local function validate(raw)
         allowed_servers = allowed,
         disabled_servers = disabled,
         tool_system_prompts = tool_system_prompts,
+        hide_tool_output = hide_tool_output,
         auto_approve = auto_approve,
         adapters = validated_adapters,
     },
@@ -466,6 +472,27 @@ function M.resolve_tool_system_prompts(global_value, start_dir)
         return global_value
     end
     return true
+end
+
+--- Resolve the hide_tool_output flag for a chat session.
+---
+--- Resolution order (first match wins):
+---   1. ``.mcp-companion.json`` walked up from cwd, if it sets the field.
+---   2. The ``global_value`` argument (``cfg.cc.hide_tool_output``).
+---   3. ``false`` (the built-in default — show tool output).
+---
+--- @param global_value boolean|nil The cc.hide_tool_output plugin setting.
+--- @param start_dir? string Defaults to vim.fn.getcwd().
+--- @return boolean
+function M.resolve_hide_tool_output(global_value, start_dir)
+    local cfg = M.resolve(start_dir)
+    if cfg and cfg.hide_tool_output ~= nil then
+        return cfg.hide_tool_output
+    end
+    if global_value ~= nil then
+        return global_value
+    end
+    return false
 end
 
 --- Compute the set of servers currently *hidden* by a project file.
