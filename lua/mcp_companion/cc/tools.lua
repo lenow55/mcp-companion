@@ -142,7 +142,7 @@ end
 --- in the LLM message history but nothing is drawn into the chat buffer
 --- (cc.hide_tool_output / .mcp-companion.json#hide_tool_output).
 --- @param display_name string Tool display name for output formatting
---- @param hide? boolean Suppress buffer rendering of the output
+--- @param hide? string|false Suppress buffer rendering of the output
 --- @return table
 local function _make_output(display_name, hide)
     return {
