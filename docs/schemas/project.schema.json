@@ -32,10 +32,6 @@
             "description": "Whether to add per-tool natural-language system messages alongside the tools array. Useful for models that ignore JSON-Schema descriptions; set to false to save tokens. Overrides the plugin-level cc.tool_system_prompts setting; defaults to true.",
             "type": "boolean"
         },
-        "hide_tool_output": {
-            "description": "When true, MCP tool results are kept in the LLM message history but not drawn into the CodeCompanion chat buffer (no 'Tool:' blocks). Overrides the plugin-level cc.hide_tool_output setting; defaults to false.",
-            "type": "boolean"
-        },
         "auto_approve": {
             "description": "Per-server auto-approve overrides for in-process CodeCompanion tool calls in this project. Keys are server names (proxied servers from your servers.json, or native servers such as 'neovim'). Each value is the auto-approve spec and overrides the plugin-level setting for that server in this project. Applies to in-process CodeCompanion chats only; external ACP/CLI agents use their host harness's own approval.",
             "type": "object",

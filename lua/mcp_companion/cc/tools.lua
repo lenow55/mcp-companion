@@ -137,12 +137,7 @@ end
 ---     the message must be written to the chat via `meta.tools.chat`.
 --- All three must call `chat:add_tool_output(tool, { content = ..., display = ... })`
 --- (a table, not a bare string) so the result reaches the LLM and the buffer.
----
---- When `hide` is true the handlers pass `display = false`: the output is kept
---- in the LLM message history but nothing is drawn into the chat buffer
---- (cc.hide_tool_output / .mcp-companion.json#hide_tool_output).
 --- @param display_name string Tool display name for output formatting
---- @param hide? string|boolean Suppress buffer rendering of the output
 --- @return table
 local function _make_output(display_name, hide)
     return {
@@ -224,7 +219,6 @@ function M.register()
     -- re-registration (e.g. after :MCPRestart or a servers-updated event).
     local project = require("mcp_companion.project")
     local sysp_enabled = project.resolve_tool_system_prompts(config.get().cc.tool_system_prompts)
-    local hide_output = project.resolve_hide_tool_output(config.get().cc.hide_tool_output)
 
     for _, server in ipairs(servers) do
         -- Skip the internal _combiner pseudo-server
@@ -265,7 +259,7 @@ function M.register()
                                 captured_description
                             )
                         end or nil,
-                        output = _make_output(captured_display, hide_output),
+                        output = _make_output(captured_display),
                         schema = {
                             type = "function",
                             ["function"] = {
@@ -364,7 +358,6 @@ function M.register_native()
 
     local project = require("mcp_companion.project")
     local sysp_enabled = project.resolve_tool_system_prompts(config.get().cc.tool_system_prompts)
-    local hide_output = project.resolve_hide_tool_output(config.get().cc.hide_tool_output)
 
     local registered_tools = 0
     for _, server in ipairs(native_servers) do
@@ -393,7 +386,7 @@ function M.register_native()
                                     )
                                 end
                             or nil,
-                        output = _make_output(display, hide_output),
+                        output = _make_output(display),
                         schema = {
                             type = "function",
                             ["function"] = {

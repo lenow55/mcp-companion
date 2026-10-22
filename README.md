@@ -1361,11 +1361,6 @@ require("mcp_companion").setup({
         -- false: saves tokens (descriptions duplicate the schema's `description` fields).
         -- Overridden per-project by .mcp-companion.json.
         tool_system_prompts = true,
-        -- Hide MCP tool output in the CodeCompanion chat buffer.
-        -- true: tool results are sent to the LLM but nothing is drawn in the buffer.
-        -- false (default): the usual "Tool: ..." blocks are shown.
-        -- Overridden per-project by .mcp-companion.json.
-        hide_tool_output = false,
         -- Normalize tool JSON schemas to fix providers (e.g. moonshot-ai/kimi) that reject
         -- schemas where `type` and `anyOf` coexist at the same level with a 400 error.
         -- The transformation is semantically equivalent and accepted by lenient validators.
@@ -1589,7 +1584,6 @@ Or hide specific servers from an otherwise-default project:
 | `allowed_servers`     | `string[]` | Whitelist — only these servers are visible.                                                                                                                                                                                                                                                                                                                                                                                                    |
 | `disabled_servers`    | `string[]` | Blacklist — every other configured server is visible.                                                                                                                                                                                                                                                                                                                                                                                          |
 | `tool_system_prompts` | `boolean`  | Override the plugin-level `cc.tool_system_prompts` setting (default `true`). Set `false` here to suppress per-tool natural-language system messages just for this project.                                                                                                                                                                                                                                                                     |
-| `hide_tool_output`    | `boolean`  | Override the plugin-level `cc.hide_tool_output` setting (default `false`). Set `true` here to keep MCP tool results in the LLM history but suppress their rendering in the CodeCompanion chat buffer for this project.                                                                                                                                                                                                                         |
 | `adapters`            | `object`   | Per-adapter server filter overrides. Keys are adapter names for chats (e.g. `"moonshot-ai"`, `"claude"`, `"copilot_acp"`) or CLI agent names (e.g. `"claude_code"`). Each value is an object with the same `allowed_servers` / `disabled_servers` shape as the top level, and overrides the top-level filter for sessions using that adapter/agent. Useful when different models need to see different server subsets within the same project. |
 
 Example with per-adapter overrides:
