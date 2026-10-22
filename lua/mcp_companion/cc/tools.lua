@@ -157,7 +157,7 @@ local function _make_output(display_name, hide)
             if reason and reason ~= "" then
                 msg = string.format('%s: "%s"', msg, reason)
             end
-            chat:add_tool_output(self, { content = msg, display = hide and false or nil })
+            chat:add_tool_output(self, { content = msg, display = true })
         end,
         error = function(self, stderr, meta) -- luacheck: ignore 212/self
             local chat = meta and meta.tools and meta.tools.chat
@@ -167,8 +167,8 @@ local function _make_output(display_name, hide)
             local err = vim.iter(stderr or {}):flatten():join("\n")
             local text = err ~= "" and err or "Unknown error"
             chat:add_tool_output(self, {
-                content = text,
-                display = hide and false or string.format("**`%s` Tool Error**:\n%s", display_name, text),
+                content = string.format("**`%s` Tool Error**:\n%s", display_name, text),
+                display = true,
             })
         end,
         success = function(self, stdout, meta) -- luacheck: ignore 212/self
@@ -180,12 +180,12 @@ local function _make_output(display_name, hide)
             if text == "" then
                 chat:add_tool_output(self, {
                     content = string.format("`%s` completed with no output.", display_name),
-                    display = hide and false or string.format("`%s` completed with no output.", display_name),
+                    display = hide,
                 })
             else
                 chat:add_tool_output(self, {
                     content = text,
-                    display = hide and false or string.format("**`%s` Tool**:\n```\n%s\n```", display_name, text),
+                    display = hide,
                 })
             end
         end,
