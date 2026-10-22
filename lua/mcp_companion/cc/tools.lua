@@ -177,12 +177,12 @@ local function _make_output(display_name, hide)
             if text == "" then
                 chat:add_tool_output(self, {
                     content = string.format("`%s` completed with no output.", display_name),
-                    display = hide,
+                    display = false,
                 })
             else
                 chat:add_tool_output(self, {
                     content = text,
-                    display = hide,
+                    display = false,
                 })
             end
         end,
