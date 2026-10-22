@@ -483,7 +483,7 @@ end
 ---
 --- @param global_value boolean|nil The cc.hide_tool_output plugin setting.
 --- @param start_dir? string Defaults to vim.fn.getcwd().
---- @return boolean|string
+--- @return string|boolean
 function M.resolve_hide_tool_output(global_value, start_dir)
     local cfg = M.resolve(start_dir)
     if cfg and cfg.hide_tool_output ~= nil then
